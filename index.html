@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>3D Шутер от первого лица</title>
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { 
+    overflow: hidden; 
+    background: #000; 
+    font-family: Arial, sans-serif; 
+    touch-action: none; /* Запрет зума и скролла на смартфоне */
+  }
+  
+  #topIcon {
+    position: absolute; top: 15px; left: 50%;
+    transform: translateX(-50%); z-index: 200;
+    text-align: center; pointer-events: none;
+  }
+  #topIcon img { width: 48px; height: 48px; display: block; filter: drop-shadow(0 0 8px #0f0); }
+
+  #crosshair {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px; height: 20px;
+    border: 2px solid #0f0; border-radius: 50%;
+    pointer-events: none; z-index: 10;
+  }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #0f0; }
+  #crosshair::before { width: 2px; height: 8px; top: -10px; left: 9px; }
+  #crosshair::after { width: 8px; height: 2px; top: 9px; left: -10px; }
+
+  #ui {
+    position: absolute; top: 20px; left: 20px; color: #0f0;
+    font-size: 20px; text-shadow: 2px 2px 4px #000;
+    font-family: 'Courier New', monospace; z-index: 50;
+  }
+
+  #startScreen {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.92); color: #0f0;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    font-family: 'Courier New', monospace;
+    cursor: pointer; z-index: 100;
+  }
+  #startScreen h1 { font-size: 40px; margin-bottom: 20px; text-shadow: 0 0 20px #0f0; text-align: center; }
+  #startScreen p { font-size: 18px; margin: 5px; text-align: center; }
+  #startScreen .blink { animation: blink 1s infinite; margin-top: 30px; font-size: 22px; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .support-block {
+    position: absolute; bottom: 10px; left: 0; width: 100%;
+    text-align: center; color: #0f0; font-size: 13px; line-height: 1.5;
+    padding: 0 15px; font-family: Arial, sans-serif; z-index: 101;
+    pointer-events: none;
+  }
+  .support-block > * { pointer-events: auto; }
+  .support-block strong { color: #fff; font-size: 16px; letter-spacing: 1px; }
+  .copy-btn {
+    background: #0f0; color: #000; border: none; padding: 4px 10px;
+    cursor: pointer; border-radius: 4px; font-weight: bold; font-size: 13px;
+    margin: 0 5px; transition: background 0.2s;
+  }
+  .copy-btn:active { background: #fff; }
+  .support-block a { color: #00ffff; text-decoration: none; font-weight: bold; }
+
+  /* Мобильное управление */
+  #mobileControls {
+    display: none; position: absolute; bottom: 0; left: 0;
+    width: 100%; height: 100%; pointer-events: none; z-index: 90;
+  }
+  .joystick-zone {
+    position: absolute; left: 30px; bottom: 40px;
+    width: 120px; height: 120px;
+    background: rgba(0, 255, 0, 0.1); border: 2px solid rgba(0, 255, 0, 0.4);
+    border-radius: 50%; pointer-events: auto;
+  }
+  .joystick-knob {
+    position: absolute; top: 50%; left: 50%;
+    width: 44px; height: 44px;
+    background: rgba(0, 255, 0, 0.6); border-radius: 50%;
+    transform: translate(-50%, -50%); transition: transform 0.1s;
+  }
+  #shootBtn {
+    position: absolute; right: 30px; bottom: 50px;
+    width: 80px; height: 80px;
+    background: rgba(255, 50, 50, 0.3); border: 3px solid rgba(255, 50, 50, 0.7);
+    border-radius: 50%; color: #fff; font-weight: bold; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: auto; user-select: none;
+    box-shadow: 0 0 15px rgba(255, 0, 0, 0.4);
+  }
+  #shootBtn:active { background: rgba(255, 50, 50, 0.7); transform: scale(0.95); }
+
+  @media (max-width: 768px) {
+    #startScreen h1 { font-size: 32px; }
+    .support-block { font-size: 12px; bottom: 5px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="topIcon"><img src="favicon.ico" alt="Значок"></div>
+<div id="crosshair"></div>
+
+<div id="ui">
+  <div>СЧЁТ: <span id="score">0</span></div>
+  <div>ПАТРОНЫ: <span id="ammo">∞</span></div>
+</div>
+
+<div id="startScreen">
+  <h1>3D ШУТЕР</h1>
+  <p>💻 ПК: СТРЕЛКИ — движение, МЫШЬ — обзор, ПРОБЕЛ — огонь</p>
+  <p>📱 Смартфон: ЛЕВЫЙ КРУГ — движение, ПРАВЫЙ край — обзор, КНОПКА — огонь</p>
+  <p class="blink">▶ КОСНИТЕСЬ ИЛИ КЛИКНИТЕ ЧТОБЫ НАЧАТЬ ◀</p>
+
+  <div class="support-block">
+    <p>🤝 ПОДДЕРЖАТЬ ПРОЕКТ 💙 Приложение бесплатное. Было и останется.</p>
+    <p>Если проект помог вам или вашим близким — поддержите разработку добровольным переводом.</p>
+    <p>📱 ПЕРЕВОД ПО НОМЕРУ: <strong>8-920-227-56-76</strong> <button class="copy-btn" onclick="event.stopPropagation(); navigator.clipboard.writeText('89202275676').then(() => alert('✅ Скопировано!')).catch(() => alert('❌ Ошибка'));">📋 Копировать</button><br>✅ Мгновенно. Без комиссии. Безопасно.</p>
+    <p>❤️ Спасибо за поддержку!</p>
+    <p>🌟 👉 <a href="https://ancf-hue.github.io/" target="_blank">ancf-hue.github.io</a> Каталог бесплатных офлайн-приложений Anti-AI Shield.</p>
+  </div>
+</div>
+
+<!-- Мобильное управление -->
+<div id="mobileControls">
+  <div class="joystick-zone" id="joystickZone">
+    <div class="joystick-knob" id="joystickKnob"></div>
+  </div>
+  <div id="shootBtn">ОГОНЬ</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+// ========== АУДИО СИСТЕМА (Процедурная, без внешних файлов) ==========
+let audioCtx;
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+function playShootSound() {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.15);
+  gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.15);
+}
+
+function playExplosionSound() {
+  if (!audioCtx) return;
+  const bufferSize = audioCtx.sampleRate * 0.3; // 0.3 секунды
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1; // Белый шум
+  }
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = buffer;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+  
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 1000;
+  
+  noise.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  noise.start();
+}
+
+// ========== ПРОВЕРКА МОБИЛЬНОГО УСТРОЙСТВА ==========
+const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+if (isTouchDevice) {
+  document.getElementById('mobileControls').style.display = 'block';
+}
+
+// ========== СЦЕНА ==========
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050510);
+scene.fog = new THREE.Fog(0x050510, 10, 50);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 1.7, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+// ========== ЗВЁЗДНОЕ НЕБО ==========
+const starsGeometry = new THREE.BufferGeometry();
+const starsCount = 3000;
+const posArray = new Float32Array(starsCount * 3);
+for(let i = 0; i < starsCount * 3; i++) {
+  posArray[i] = (Math.random() - 0.5) * 200;
+}
+starsGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+const starsMaterial = new THREE.PointsMaterial({
+  size: 0.25, color: 0xffffff, transparent: true, opacity: 0.9, sizeAttenuation: true
+});
+const starField = new THREE.Points(starsGeometry, starsMaterial);
+starField.position.y = 20;
+scene.add(starField);
+
+// ========== ОСВЕЩЕНИЕ ==========
+scene.add(new THREE.AmbientLight(0x404060, 0.5));
+const mainLight = new THREE.PointLight(0xffffaa, 1, 30);
+mainLight.position.set(0, 5, 0);
+mainLight.castShadow = true;
+scene.add(mainLight);
+
+const colors = [0xff0066, 0x00ffff, 0xffaa00, 0x00ff66];
+const lamps = [];
+for (let i = 0; i < 4; i++) {
+  const lamp = new THREE.PointLight(colors[i], 1.5, 15);
+  const angle = (i / 4) * Math.PI * 2;
+  lamp.position.set(Math.cos(angle) * 15, 3, Math.sin(angle) * 15);
+  scene.add(lamp);
+  lamps.push(lamp);
+}
+
+// ========== ПОЛ И СТЕНЫ ==========
+const floorGeo = new THREE.PlaneGeometry(40, 40, 20, 20);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x222233, metalness: 0.3, roughness: 0.8 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+scene.add(new THREE.GridHelper(40, 40, 0x00ff88, 0x004422));
+
+function createWall(x, z, w, h, d, color) {
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.3 }));
+  wall.position.set(x, h/2, z);
+  wall.castShadow = true; wall.receiveShadow = true;
+  scene.add(wall);
+  return wall;
+}
+createWall(0, -20, 40, 6, 1, 0x444466);
+createWall(0, 20, 40, 6, 1, 0x444466);
+createWall(-20, 0, 1, 6, 40, 0x444466);
+createWall(20, 0, 1, 6, 40, 0x444466);
+
+for (let i = 0; i < 8; i++) {
+  const angle = (i / 8) * Math.PI * 2;
+  createWall(Math.cos(angle) * 10, Math.sin(angle) * 10, 1.5, 4, 1.5, 0x664488);
+}
+
+// ========== МИШЕНИ ==========
+const targets = [];
+function spawnTarget() {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), new THREE.MeshStandardMaterial({ color: 0xff0044, emissive: 0xff0022, emissiveIntensity: 0.5 }));
+  group.add(body);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.05, 8, 32), new THREE.MeshBasicMaterial({ color: 0xff0088 }));
+  group.add(ring);
+  group.position.set((Math.random() - 0.5) * 30, 1 + Math.random() * 2, (Math.random() - 0.5) * 30);
+  scene.add(group);
+  targets.push({ group, ring, health: 1 });
+}
+for (let i = 0; i < 10; i++) spawnTarget();
+
+// ========== УПРАВЛЕНИЕ ==========
+let yaw = 0, pitch = 0;
+const keys = {};
+let isPlaying = false;
+
+function startGame() {
+  isPlaying = true;
+  initAudio(); // Инициализация звука по клику (требование браузеров)
+  document.getElementById('startScreen').style.display = 'none';
+  if (!isTouchDevice) {
+    renderer.domElement.requestPointerLock();
+  }
+}
+document.getElementById('startScreen').addEventListener('click', startGame);
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement !== renderer.domElement && isPlaying && !isTouchDevice) {
+    isPlaying = false;
+    document.getElementById('startScreen').style.display = 'flex';
+  }
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isPlaying || isTouchDevice) return;
+  yaw -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+});
+document.addEventListener('keydown', (e) => keys[e.code] = true);
+document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+// Мобильное управление: джойстик
+let moveTouchId = null;
+let joyStartX = 0, joyStartY = 0;
+let moveVector = { x: 0, y: 0 };
+const joystickZone = document.getElementById('joystickZone');
+const joystickKnob = document.getElementById('joystickKnob');
+
+joystickZone.addEventListener('touchstart', (e) => {
+  e.preventDefault(); e.stopPropagation();
+  const touch = e.changedTouches[0];
+  moveTouchId = touch.identifier;
+  joyStartX = touch.clientX;
+  joyStartY = touch.clientY;
+}, { passive: false });
+
+joystickZone.addEventListener('touchmove', (e) => {
+  e.preventDefault(); e.stopPropagation();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    if (e.changedTouches[i].identifier === moveTouchId) {
+      const t = e.changedTouches[i];
+      let dx = t.clientX - joyStartX;
+      let dy = t.clientY - joyStartY;
+      const distance = Math.sqrt(dx*dx + dy*dy);
+      const maxDist = 40;
+      if (distance > maxDist) {
+        dx = (dx / distance) * maxDist;
+        dy = (dy / distance) * maxDist;
+      }
+      joystickKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      moveVector.x = dx / maxDist;
+      moveVector.y = dy / maxDist;
+    }
+  }
+}, { passive: false });
+
+const endJoystick = (e) => {
+  e.preventDefault();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    if (e.changedTouches[i].identifier === moveTouchId) {
+      moveTouchId = null;
+      moveVector.x = 0;
+      moveVector.y = 0;
+      joystickKnob.style.transform = `translate(-50%, -50%)`;
+    }
+  }
+};
+joystickZone.addEventListener('touchend', endJoystick);
+joystickZone.addEventListener('touchcancel', endJoystick);
+
+// Мобильное управление: обзор
+let lookTouchId = null;
+let lookStartX = 0, lookStartY = 0;
+
+document.addEventListener('touchstart', (e) => {
+  if (!isPlaying) return;
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (t.clientX > window.innerWidth / 2 && lookTouchId === null && t.target.id !== 'shootBtn') {
+      lookTouchId = t.identifier;
+      lookStartX = t.clientX;
+      lookStartY = t.clientY;
+    }
+  }
+}, { passive: false });
+
+document.addEventListener('touchmove', (e) => {
+  if (!isPlaying) return;
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (t.identifier === lookTouchId) {
+      const dx = t.clientX - lookStartX;
+      const dy = t.clientY - lookStartY;
+      yaw -= dx * 0.005;
+      pitch -= dy * 0.005;
+      pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+      lookStartX = t.clientX;
+      lookStartY = t.clientY;
+    }
+  }
+}, { passive: false });
+
+document.addEventListener('touchend', (e) => {
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    if (e.changedTouches[i].identifier === lookTouchId) {
+      lookTouchId = null;
+    }
+  }
+});
+
+// Стрельба (мобильная кнопка)
+document.getElementById('shootBtn').addEventListener('touchstart', (e) => {
+  e.preventDefault(); e.stopPropagation();
+  if (isPlaying) shoot();
+}, { passive: false });
+
+// ========== СТРЕЛЬБА ==========
+const raycaster = new THREE.Raycaster();
+let score = 0;
+
+function shoot() {
+  if (!isPlaying) return;
+  playShootSound(); // ЗВУК ВЫСТРЕЛА
+  
+  const flash = new THREE.PointLight(0xffff00, 3, 5);
+  flash.position.copy(camera.position);
+  scene.add(flash);
+  setTimeout(() => scene.remove(flash), 50);
+  
+  raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const meshes = targets.map(t => t.group.children[0]);
+  const hits = raycaster.intersectObjects(meshes);
+  
+  if (hits.length > 0) {
+    const hitMesh = hits[0].object;
+    const target = targets.find(t => t.group.children[0] === hitMesh);
+    if (target) {
+      playExplosionSound(); // ЗВУК ВЗРЫВА
+      createExplosion(target.group.position.clone());
+      scene.remove(target.group);
+      targets.splice(targets.indexOf(target), 1);
+      score++;
+      document.getElementById('score').textContent = score;
+      setTimeout(spawnTarget, 1000);
+    }
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && isPlaying && !isTouchDevice) {
+    e.preventDefault(); shoot();
+  }
+});
+document.addEventListener('mousedown', (e) => {
+  if (e.button === 0 && isPlaying && !isTouchDevice) shoot();
+});
+
+function createExplosion(pos) {
+  const particles = [];
+  for (let i = 0; i < 20; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshBasicMaterial({ color: 0xff8800 }));
+    p.position.copy(pos);
+    p.userData.vel = new THREE.Vector3((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3);
+    scene.add(p); particles.push(p);
+  }
+  let life = 30;
+  const anim = () => {
+    if (life-- <= 0) { particles.forEach(p => scene.remove(p)); return; }
+    particles.forEach(p => { p.position.add(p.userData.vel); p.scale.multiplyScalar(0.95); });
+    requestAnimationFrame(anim);
+  };
+  anim();
+}
+
+// ========== ДВИЖЕНИЕ ==========
+const velocity = new THREE.Vector3();
+const direction = new THREE.Vector3();
+
+function updateMovement() {
+  if (!isPlaying) return;
+  const speed = isTouchDevice ? 0.12 : 0.1;
+  direction.set(0, 0, 0);
+  
+  if (isTouchDevice) {
+    direction.x = moveVector.x;
+    direction.z = moveVector.y;
+  } else {
+    if (keys['ArrowUp']) direction.z -= 1;
+    if (keys['ArrowDown']) direction.z += 1;
+    if (keys['ArrowLeft']) direction.x -= 1;
+    if (keys['ArrowRight']) direction.x += 1;
+  }
+  direction.normalize();
+  
+  const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+  const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+  
+  velocity.x = (forward.x * -direction.z + right.x * direction.x) * speed;
+  velocity.z = (forward.z * -direction.z + right.z * direction.x) * speed;
+  
+  camera.position.add(velocity);
+  camera.position.x = Math.max(-19, Math.min(19, camera.position.x));
+  camera.position.z = Math.max(-19, Math.min(19, camera.position.z));
+  camera.position.y = 1.7;
+  
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+}
+
+// ========== АНИМАЦИЯ ==========
+function animate() {
+  requestAnimationFrame(animate);
+  updateMovement();
+  
+  const time = Date.now() * 0.001;
+  targets.forEach((t, i) => {
+    t.group.position.y += Math.sin(time * 2 + i) * 0.005;
+    t.ring.rotation.x += 0.02;
+    t.ring.rotation.y += 0.03;
+  });
+  
+  lamps.forEach((l, i) => { l.intensity = 1.5 + Math.sin(time * 2 + i) * 0.5; });
+  starField.rotation.y += 0.0002;
+  
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+animate();
+</script>
+</body>
+</html>
